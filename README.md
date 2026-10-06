@@ -1,6 +1,19 @@
 # MediGuide AI
 
-MediGuide AI is a responsive healthcare-information MVP for understanding medical reports and exploring a sensible next step. It is an educational tool, not a medical device or a substitute for a clinician.
+MediGuide AI helps you understand medical reports in everyday language, keep chat history under your account, and find nearby clinics from OpenStreetMap. It is an educational tool, not a medical device or a substitute for a clinician.
+
+## Run the API
+
+```powershell
+cd backend
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn main:app --reload --port 8000
+```
+
+Add a `GEMMA_API_KEY` in `backend/.env` if you want live Gemma answers. Without a key, MediAI still works with a safe educational fallback. Never put provider keys in the frontend.
 
 ## Run the frontend
 
@@ -9,25 +22,18 @@ npm install
 npm run dev
 ```
 
-Vite serves the app at `http://localhost:5173`. The complete demo flow works without credentials. Select **Explore with a sample report** to see the fictional blood panel, then review its analysis, ask MediAI a question, explore nearby demo care, and request a demo appointment.
+Vite serves the app at `http://localhost:5173` and proxies `/api` to port 8000.
 
-## Run the API
+Create an account, then upload a report, chat with MediAI, and search nearby care. Chat history and reports are stored per user in SQLite (`backend/mediguide.db`).
 
-In another terminal:
+## What is real now
 
-```powershell
-cd backend
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
+- Register / sign in, with chats and reports saved to your account
+- PDF text extraction for report context (images stay as files you can discuss in chat)
+- Nearby hospitals and clinics from OpenStreetMap
+- Optional Gemma answers when `GEMMA_API_KEY` is set
 
-The API is available at `http://localhost:8000`; interactive docs are at `/docs`. SQLite initializes on startup. Vite proxies `/api` to port 8000.
+## Boundaries
 
-## MVP boundaries
-
-- Browser demo uploads retain only filename and metadata in the current session. The API currently saves file metadata only and does not persist report contents. Add private, encrypted object storage and authentication before handling real health documents.
-- The included sample report and provider profiles are fictional. The map is illustrative; provider details, ratings, availability, and appointment requests are not real.
-- `GEMMA_API_URL`, `GEMMA_API_KEY`, and `GEMMA_MODEL` configure the optional server-side Google Generative Language (Gemma) chat adapter. Without a key, the API returns a safe, labeled educational fallback. Never expose provider keys to the browser. The included demo frontend does not require the API to be running.
+- This MVP stores account data on the local API server. Add encrypted object storage before handling sensitive production health documents.
 - MediGuide AI does not diagnose, prescribe medicines, recommend dosage changes, or replace professional medical advice. For a medical emergency, contact local emergency services.
