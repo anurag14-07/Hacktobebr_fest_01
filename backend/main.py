@@ -9,6 +9,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from ai_provider import generate_educational_answer
+
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "mediguide.db")))
 ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png"}
@@ -135,12 +137,11 @@ def chat(request: QuestionRequest) -> dict[str, Any]:
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="Enter a question to continue.")
-    # This MVP uses a clearly labeled fallback until a reviewed Gemma integration is configured.
-    configured = bool(os.getenv("GEMMA_API_URL") and os.getenv("GEMMA_API_KEY"))
+    answer = generate_educational_answer(question)
     return {
-        "mode": "demo" if not configured else "provider_not_implemented",
+        "mode": "gemma" if answer else "demo",
         "question": question,
-        "sections": {
+        "sections": answer or {
             "summary": "I can help explain general health information, but I cannot diagnose a condition or determine what a result means for you personally.",
             "explanation": "Lab reference ranges are guides and can vary. A clinician can interpret a result alongside your health history and the reason the test was ordered.",
             "important_points": ["Do not start, stop, or change medicines or supplements based on this response.", "The included sample report and values are fictional."],

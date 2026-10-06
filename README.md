@@ -29,5 +29,5 @@ The API is available at `http://localhost:8000`; interactive docs are at `/docs`
 
 - Browser demo uploads retain only filename and metadata in the current session. The API currently saves file metadata only and does not persist report contents. Add private, encrypted object storage and authentication before handling real health documents.
 - The included sample report and provider profiles are fictional. The map is illustrative; provider details, ratings, availability, and appointment requests are not real.
-- `GEMMA_API_URL`, `GEMMA_API_KEY`, and `GEMMA_MODEL` are reserved in `backend/.env.example`. The chat endpoint intentionally uses a safe, labeled educational fallback until a reviewed Gemma provider adapter is implemented. Never expose provider keys to the browser.
+- `GEMMA_API_URL`, `GEMMA_API_KEY`, and `GEMMA_MODEL` configure the optional server-side Google Generative Language (Gemma) chat adapter. Without a key, the API returns a safe, labeled educational fallback. Never expose provider keys to the browser. The included demo frontend does not require the API to be running.
 - MediGuide AI does not diagnose, prescribe medicines, recommend dosage changes, or replace professional medical advice. For a medical emergency, contact local emergency services.
