@@ -268,7 +268,7 @@ function AuthScreen({ error, onSubmit }) {
   const submit = async (event) => {
     event.preventDefault()
     setBusy(true)
-    await onSubmit(mode, { name, email, password })
+    await onSubmit(mode, { email, password, ...(mode === 'register' ? { name } : {}) })
     setBusy(false)
   }
 
