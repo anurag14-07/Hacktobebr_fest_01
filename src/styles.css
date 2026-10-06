@@ -21,7 +21,11 @@
 .auth-error{padding:9px 11px;border-radius:7px;background:#fdf2ee;color:#9a5645;font-size:11px}
 a.button{text-decoration:none}
 .care-error{margin:0 0 12px;padding:10px 12px;border-radius:7px;background:#f7f1e6;color:#7a6240;font-size:11px}
+.care-retry{margin-left:9px;padding:0;border:0;background:none;color:#155b53;font-size:11px;font-weight:700;text-decoration:underline}
 .quick-question.active-thread{color:#246c5c;font-weight:700}
 .map-pin.pin-live{width:28px;height:28px}
 .pin-live.pin-2{background:#bc805c}
 .pin-live.pin-3{background:#607f8a}
+.map-panel{background-image:none}
+.care-leaflet-map{height:436px;width:100%;z-index:1}
+a.directions-button{text-decoration:none}

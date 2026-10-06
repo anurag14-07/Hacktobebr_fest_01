@@ -5,6 +5,8 @@ import {
   LogOut, Map, MapPin, MessageCircle, Navigation, Paperclip, Phone, Search, Send, ShieldCheck,
   Sparkles, Stethoscope, Upload, UsersRound, X,
 } from 'lucide-react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { api, getToken, setSession } from './api.js'
 
 function initials(name = '') {
@@ -22,6 +24,16 @@ function formatWhen(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+function externalWebsite(value) {
+  if (!value) return ''
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+  } catch {
+    return ''
+  }
 }
 
 function reportType(report) {
@@ -53,6 +65,7 @@ function App() {
   const [careLoading, setCareLoading] = useState(false)
   const [careError, setCareError] = useState('')
   const fileInput = useRef(null)
+  const lastCareParams = useRef(null)
 
   const notify = (message) => {
     setToast(message)
@@ -181,6 +194,7 @@ function App() {
   }
 
   const loadCare = async (params) => {
+    lastCareParams.current = params
     setCareLoading(true)
     setCareError('')
     try {
@@ -189,8 +203,7 @@ function App() {
       setProviders(result.providers || [])
       if (!(result.providers || []).length) setCareError('No hospitals or clinics were found nearby. Try another city.')
     } catch (error) {
-      setCareError(error.message)
-      setProviders([])
+      setCareError(providers.length ? `${error.message} Showing the previous results.` : error.message)
     } finally {
       setCareLoading(false)
     }
@@ -247,7 +260,7 @@ function App() {
           {page === 'Report Analysis' && <AnalysisPage report={activeReport} analysis={analysis} onChat={startNewChat} onCare={() => setPage('Nearby Care')} onBack={() => setPage('Home')} />}
           {page === 'MediAI Chat' && <ChatPage user={user} report={activeReport} conversations={conversations} activeConversation={activeConversation} messages={messages} draft={draft} setDraft={setDraft} thinking={thinking} onSend={sendQuestion} onUpload={() => fileInput.current?.click()} onOpen={openConversation} onNew={startNewChat} />}
           {page === 'Next Steps' && <NextStepsPage onCare={() => { setPage('Nearby Care'); useMyLocation() }} />}
-          {page === 'Nearby Care' && <CarePage view={view} setView={setView} search={search} setSearch={setSearch} placeQuery={placeQuery} setPlaceQuery={setPlaceQuery} providers={filteredProviders} location={careLocation} loading={careLoading} error={careError} onLocate={useMyLocation} onSearchPlace={() => loadCare({ q: placeQuery })} onDetails={setSelectedProvider} />}
+          {page === 'Nearby Care' && <CarePage view={view} setView={setView} search={search} setSearch={setSearch} placeQuery={placeQuery} setPlaceQuery={setPlaceQuery} providers={filteredProviders} location={careLocation} loading={careLoading} error={careError} onRetry={lastCareParams.current ? () => loadCare(lastCareParams.current) : null} onLocate={useMyLocation} onSearchPlace={() => loadCare({ q: placeQuery })} onDetails={setSelectedProvider} />}
           {page === 'My Reports' && <ReportsPage reports={reports} onUpload={() => fileInput.current?.click()} onAnalyze={openAnalysis} onChat={startNewChat} />}
         </div>
       </main>
@@ -363,40 +376,97 @@ function NextStepsPage({ onCare }) {
   </>
 }
 
-function CarePage({ view, setView, search, setSearch, placeQuery, setPlaceQuery, providers, location, loading, error, onLocate, onSearchPlace, onDetails }) {
+function CarePage({ view, setView, search, setSearch, placeQuery, setPlaceQuery, providers, location, loading, error, onRetry, onLocate, onSearchPlace, onDetails }) {
   return <><PageHeading eyebrow="CARE AROUND YOU" title="Find a good place to start." description="Live results from OpenStreetMap: hospitals, clinics, and doctors near you." action={<button className="location-chip" onClick={onLocate}><MapPin size={15} /> {location?.label || 'Use my location'}</button>} />
     <form className="care-toolbar" onSubmit={(event) => { event.preventDefault(); onSearchPlace() }}><div className="search-field"><Search size={16} /><input value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} placeholder="Search a city or postal code" /><button type="submit" className="text-action">Search</button></div><div className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter by name or specialty" /></div><div className="segmented"><button type="button" className={view === 'List' ? 'selected' : ''} onClick={() => setView('List')}><UsersRound size={15} /> List</button><button type="button" className={view === 'Map' ? 'selected' : ''} onClick={() => setView('Map')}><Map size={15} /> Map</button></div></form>
-    {error && <div className="care-error">{error}</div>}
+    {error && <div className="care-error">{error}{onRetry && <button type="button" className="care-retry" onClick={onRetry} disabled={loading}>Try again</button>}</div>}
     <div className="care-layout"><div className="provider-list"><div className="results-count">{loading ? 'Looking for nearby care…' : `${providers.length} nearby care options`}{location && <span> · {location.label}</span>}</div>
       {!providers.length && !loading && <div className="empty-state compact-empty"><MapPin size={22} /><h3>No locations loaded yet</h3><p>Share your location or search a city to see real clinics and hospitals.</p><button className="button button-dark" onClick={onLocate}>Use my location</button></div>}
       {providers.map((provider) => <ProviderCard provider={provider} key={provider.id} onDetails={onDetails} />)}
     </div>
-      <CareMap providers={providers} location={location} view={view} onDetails={onDetails} /></div>
+      <CareMap providers={providers} location={location} view={view} /></div>
     <div className="care-footer"><ShieldCheck size={15} /> Locations come from OpenStreetMap. Hours and contact details may be incomplete.</div>
   </>
 }
 
-function CareMap({ providers, location, view, onDetails }) {
-  const points = providers.filter((item) => item.lat && item.lon)
-  const lats = points.map((item) => item.lat)
-  const lons = points.map((item) => item.lon)
-  const minLat = Math.min(...(lats.length ? lats : [0]))
-  const maxLat = Math.max(...(lats.length ? lats : [1]))
-  const minLon = Math.min(...(lons.length ? lons : [0]))
-  const maxLon = Math.max(...(lons.length ? lons : [1]))
-  const place = (lat, lon) => ({
-    left: `${((lon - minLon) / Math.max(maxLon - minLon, 0.001)) * 80 + 10}%`,
-    top: `${(1 - (lat - minLat) / Math.max(maxLat - minLat, 0.001)) * 70 + 12}%`,
-  })
+function CareMap({ providers, location, view }) {
+  const mapElement = useRef(null)
+  const mapRef = useRef(null)
+  const markerLayerRef = useRef(null)
+  const points = useMemo(
+    () => providers.filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon)),
+    [providers],
+  )
+
+  useEffect(() => {
+    if (!mapElement.current) return undefined
+    const map = L.map(mapElement.current, { scrollWheelZoom: true }).setView([20, 0], 2)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map)
+    mapRef.current = map
+    markerLayerRef.current = L.layerGroup().addTo(map)
+
+    return () => {
+      map.remove()
+      mapRef.current = null
+      markerLayerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const markerLayer = markerLayerRef.current
+    if (!map || !markerLayer) return
+    markerLayer.clearLayers()
+
+    const coordinates = points.map((provider) => [provider.lat, provider.lon])
+    if (location && Number.isFinite(location.lat) && Number.isFinite(location.lon)) {
+      coordinates.push([location.lat, location.lon])
+      const marker = L.circleMarker([location.lat, location.lon], {
+        radius: 8,
+        color: '#fff',
+        weight: 3,
+        fillColor: '#2869a6',
+        fillOpacity: 1,
+      }).bindPopup('You are here')
+      marker.addTo(markerLayer)
+    }
+
+    points.forEach((provider) => {
+      const popup = document.createElement('div')
+      const name = document.createElement('strong')
+      name.textContent = provider.name
+      const details = document.createElement('div')
+      details.textContent = `${provider.title} · ${provider.distance} mi`
+      popup.append(name, details)
+      L.circleMarker([provider.lat, provider.lon], {
+        radius: 8,
+        color: '#fff',
+        weight: 2,
+        fillColor: '#287b68',
+        fillOpacity: 1,
+      }).bindPopup(popup).addTo(markerLayer)
+    })
+
+    if (coordinates.length === 1) {
+      map.setView(coordinates[0], 14)
+    } else if (coordinates.length > 1) {
+      map.fitBounds(coordinates, { padding: [28, 28], maxZoom: 14 })
+    }
+    window.requestAnimationFrame(() => map.invalidateSize())
+  }, [points, location, view])
+
   return <div className={`map-panel ${view === 'List' ? 'map-secondary' : ''}`}>
-    {points.map((provider, index) => <button key={provider.id} className={`map-pin pin-live pin-${(index % 3) + 1}`} style={place(provider.lat, provider.lon)} onClick={() => onDetails(provider)} title={provider.name}><MapPin size={16} fill="currentColor" /></button>)}
-    {location && <div className="you-marker" style={place(location.lat, location.lon)}><span />You</div>}
-    <div className="map-attribution">OpenStreetMap · Live locations</div>
+    <div ref={mapElement} className="care-leaflet-map" role="application" aria-label="Map of nearby hospitals and clinics" />
   </div>
 }
 
 function ProviderCard({ provider, onDetails }) {
-  return <div className="provider-card"><div className={`provider-avatar ${provider.color}`}>{provider.initials}</div><div className="provider-details"><div className="provider-name-row"><h3>{provider.name}</h3><span className="provider-distance"><MapPin size={12} />{provider.distance} mi</span></div><p>{provider.title}</p><span className="provider-place">{provider.place} · {provider.address}</span><div className="provider-meta">{provider.hours && <span><Clock3 size={13} /> {provider.hours}</span>}{provider.phone && <span><Phone size={13} /> {provider.phone}</span>}</div><div className="provider-actions"><button className="button button-dark" onClick={() => onDetails(provider)}>View details <ArrowRight size={14} /></button><button className="directions-button" onClick={() => window.open(`https://www.openstreetmap.org/?mlat=${provider.lat}&mlon=${provider.lon}#map=16/${provider.lat}/${provider.lon}`, '_blank', 'noopener,noreferrer')}><Navigation size={14} /> Directions</button></div></div></div>
+  const website = externalWebsite(provider.website)
+  const mapUrl = `https://www.openstreetmap.org/?mlat=${provider.lat}&mlon=${provider.lon}#map=16/${provider.lat}/${provider.lon}`
+  return <div className="provider-card"><div className={`provider-avatar ${provider.color}`}>{provider.initials}</div><div className="provider-details"><div className="provider-name-row"><h3>{provider.name}</h3><span className="provider-distance"><MapPin size={12} />{provider.distance} mi</span></div><p>{provider.title}</p><span className="provider-place">{provider.place} · {provider.address}</span><div className="provider-meta">{provider.hours && <span><Clock3 size={13} /> {provider.hours}</span>}{provider.phone && <span><Phone size={13} /> {provider.phone}</span>}</div><div className="provider-actions"><button className="button button-dark" onClick={() => onDetails(provider)}>View details <ArrowRight size={14} /></button><a className="directions-button" href={mapUrl} target="_blank" rel="noreferrer"><Navigation size={14} /> Map</a>{website && <a className="directions-button" href={website} target="_blank" rel="noreferrer">Website</a>}</div></div></div>
 }
 
 function ReportsPage({ reports, onUpload, onAnalyze, onChat }) {
@@ -408,7 +478,8 @@ function ReportsPage({ reports, onUpload, onAnalyze, onChat }) {
 }
 
 function ProviderModal({ provider, onClose }) {
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="booking-modal" role="dialog" aria-modal="true" aria-label="Provider details"><button className="modal-close" aria-label="Close" onClick={onClose}><X size={19} /></button><span className="eyebrow">PROVIDER DETAILS</span><div className="modal-provider"><div className={`provider-avatar large ${provider.color}`}>{provider.initials}</div><div><h2>{provider.name}</h2><span>{provider.title}</span></div></div><div className="modal-credentials"><span><MapPin size={14} /> {provider.distance} mi</span>{provider.hours && <span><Clock3 size={14} /> {provider.hours}</span>}</div><div className="provider-bio"><p><b>{provider.place}</b><br />{provider.address}{provider.phone ? <><br />{provider.phone}</> : null}</p></div><a className="button button-dark full-button" href={`https://www.openstreetmap.org/?mlat=${provider.lat}&mlon=${provider.lon}#map=16/${provider.lat}/${provider.lon}`} target="_blank" rel="noreferrer">Open in OpenStreetMap <ArrowRight size={15} /></a>{provider.website && <a className="demo-link" href={provider.website} target="_blank" rel="noreferrer">Visit website</a>}<div className="modal-footnote"><ShieldCheck size={14} /> Listing data is from OpenStreetMap contributors.</div></div></div>
+  const website = externalWebsite(provider.website)
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="booking-modal" role="dialog" aria-modal="true" aria-label="Provider details"><button className="modal-close" aria-label="Close" onClick={onClose}><X size={19} /></button><span className="eyebrow">PROVIDER DETAILS</span><div className="modal-provider"><div className={`provider-avatar large ${provider.color}`}>{provider.initials}</div><div><h2>{provider.name}</h2><span>{provider.title}</span></div></div><div className="modal-credentials"><span><MapPin size={14} /> {provider.distance} mi</span>{provider.hours && <span><Clock3 size={14} /> {provider.hours}</span>}</div><div className="provider-bio"><p><b>{provider.place}</b><br />{provider.address}{provider.phone ? <><br />{provider.phone}</> : null}</p></div><a className="button button-dark full-button" href={`https://www.openstreetmap.org/?mlat=${provider.lat}&mlon=${provider.lon}#map=16/${provider.lat}/${provider.lon}`} target="_blank" rel="noreferrer">Open in OpenStreetMap <ArrowRight size={15} /></a>{website && <a className="demo-link" href={website} target="_blank" rel="noreferrer">Visit website</a>}<div className="modal-footnote"><ShieldCheck size={14} /> Listing data is from OpenStreetMap contributors.</div></div></div>
 }
 
 export default App

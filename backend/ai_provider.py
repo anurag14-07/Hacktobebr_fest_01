@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
+
+logger = logging.getLogger(__name__)
 
 
 def generate_educational_answer(
@@ -20,7 +23,11 @@ def generate_educational_answer(
     if not api_key:
         return None
 
-    endpoint = endpoint.format(model=quote(model, safe="-._"))
+    model_id = quote(model, safe="-._")
+    endpoint = endpoint.replace("{model}", model_id).replace(f"{{{model}}}", model_id)
+    if "{" in endpoint or "}" in endpoint:
+        logger.error("Gemini API URL contains an unresolved placeholder.")
+        return None
     separator = "&" if "?" in endpoint else "?"
     url = f"{endpoint}{separator}{urlencode({'key': api_key})}"
     history_lines = []
@@ -61,11 +68,25 @@ def generate_educational_answer(
         text = payload["candidates"][0]["content"]["parts"][0]["text"]
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
         result = json.loads(text)
+        if not isinstance(result, dict):
+            logger.warning("Gemini API returned JSON that was not an object.")
+            return None
         required = {"summary", "explanation", "important_points", "suggested_next_step", "disclaimer"}
         if not required.issubset(result) or not isinstance(result["important_points"], list):
+            logger.warning("Gemini API response did not match the expected answer shape.")
             return None
-        if not all(isinstance(result[key], str) for key in required - {"important_points"}):
+        if not all(isinstance(result[key], str) for key in required - {"important_points"}) or not all(
+            isinstance(point, str) for point in result["important_points"]
+        ):
+            logger.warning("Gemini API response contains invalid field types.")
             return None
         return result
-    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError):
+    except HTTPError as error:
+        logger.warning("Gemini API request failed with HTTP %s.", error.code)
+        return None
+    except (URLError, TimeoutError) as error:
+        logger.warning("Gemini API request could not complete: %s.", error)
+        return None
+    except (KeyError, IndexError, TypeError, ValueError) as error:
+        logger.warning("Gemini API returned an invalid response: %s.", error)
         return None

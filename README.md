@@ -1,6 +1,6 @@
 # MediGuide AI
 
-MediGuide AI helps you understand medical reports in everyday language, keep chat history under your account, and find nearby clinics from OpenStreetMap. It is an educational tool, not a medical device or a substitute for a clinician.
+MediGuide AI helps you understand medical reports in everyday language, keep chat history under your account, and find nearby clinics from OpenStreetMap on an interactive map. It is an educational tool, not a medical device or a substitute for a clinician.
 
 ## Run the API
 
@@ -30,7 +30,7 @@ Create an account, then upload a report, chat with MediAI, and search nearby car
 
 - Register / sign in, with chats and reports saved to your account
 - PDF text extraction for report context (images stay as files you can discuss in chat)
-- Nearby hospitals and clinics from OpenStreetMap
+- Nearby hospital and clinic listings with interactive OpenStreetMap markers and directions
 - Optional Gemma answers when `GEMMA_API_KEY` is set
 
 ## Boundaries
