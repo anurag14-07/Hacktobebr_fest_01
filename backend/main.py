@@ -8,10 +8,12 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
 from ai_provider import generate_educational_answer
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "mediguide.db")))
 ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
